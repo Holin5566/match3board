@@ -9,13 +9,14 @@ export default class Orb extends cc.Component {
     @property(sp.Skeleton)
     spine: sp.Skeleton = null;
 
-    // @property(cc.Label)
-    // label: cc.Label = null;
+    @property(cc.Label)
+    label: cc.Label = null;
 
     public isMatch: boolean = false;
 
     private _coord: cc.Vec2 = null;
     public get coord(): cc.Vec2 { return this._coord; }
+    public get coordStr(): string { return `${this._coord.x}-${this._coord.y}`; }
 
     private _type: OrbType = null;
     public get type(): OrbType { return this._type; }
@@ -24,6 +25,7 @@ export default class Orb extends cc.Component {
     private _coordBeforMove: cc.Vec2 = null;
     private _posBeforMove: cc.Vec2 = null;
     private _isMoving: boolean = false;
+    private _isPlaying: boolean = false;
     // LIFE-CYCLE CALLBACKS:
 
     // onLoad () {}
@@ -44,7 +46,6 @@ export default class Orb extends cc.Component {
     public init(coord: cc.Vec2, type: OrbType) {
         this._coord = coord;
         this.setType(type);
-        // this.label.string = `${coord.x} - ${coord.y}`;
 
         // 綁定觸摸事件
         this.node.on(cc.Node.EventType.TOUCH_START, this.onTouchStart, this);
@@ -67,45 +68,52 @@ export default class Orb extends cc.Component {
                 this.node.setPosition(GridSystem.instance.getPos(coord));
             }
         })
-        // this.label.string = `${coord.x} - ${coord.y}`;
     }
 
-    public async dropTo(coord: cc.Vec2, isFinal: boolean = false) {
-        this._coord = coord;
-        // this.label.string = `${coord.x} - ${coord.y}`;
+    // 掉落動畫 (根據自身座標掉落，使用前先設定到對應座標)
+    public async drop(raito: number): Promise<void> {
+        const base = 0.3;
+        const duration = 0.5;
+        const before = duration * raito;
+        const during = duration - before + base;
         return new Promise((resolve, reject) => {
             cc.tween(this.node)
-                .to(1, { position: cc.v3(GridSystem.instance.getPos(coord)) }, { easing: cc.easing.quadIn })
+                .delay(before)
+                .to(during, { position: cc.v3(GridSystem.instance.getPos(this._coord)) }, { easing: cc.easing.quadOut })
                 .call(resolve)
                 .start();
         });
     }
     /** 設置屬性 */
-    public setType(type: OrbType) {
+    public setType(type?: OrbType) {
         if (!type) {
             this._type = [OrbType.H1, OrbType.H2, OrbType.N1, OrbType.N2, OrbType.N3, OrbType.N4][Math.floor(Math.random() * 6)];
         } else {
             this._type = type;
         }
         this.spine.setAnimation(0, `${this._type}_play_normal`, true);
+        this.label.string = `${this._coord.x} - ${this._coord.y}`;
     }
 
     /** 設置座標 */
     public setCoord(coord: cc.Vec2) {
         this._coord = coord;
-        // this.label.string = `${coord.x} - ${coord.y}`;
+        this.label.string = `${coord.x} - ${coord.y}`;
     }
 
     /** 播放勝利特效 */
     public async playWinEffect() {
+        if (this._isPlaying) {
+            return;
+        }
+        this._isPlaying = true;
         return new Promise((resolve, reject) => {
             this.spine.setAnimation(0, `${this._type}_play_win`, false);
             cc.error(`${this._coord.y} - ${this._coord.x}`);
             this.spine.setCompleteListener(() => {
                 this.spine.setCompleteListener(null);
-                this.spine.setAnimation(0, `${this._type}_play_normal`, true);
+                this._isPlaying = false;
                 resolve("");
-                cc.systemEvent.emit(EventType.ORB_DROP, this);
             });
         });
     }
@@ -116,7 +124,7 @@ export default class Orb extends cc.Component {
         this._posBeforMove = this.node.getPosition();
         this._coordBeforMove = this._coord;
 
-        cc.systemEvent.emit(EventType.ORB_PICK, e);
+        cc.systemEvent.emit(EventType.ORB_PICK, this);
     }
 
     /** 監聽點擊移動 */

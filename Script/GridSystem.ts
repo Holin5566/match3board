@@ -30,7 +30,7 @@ class GridSystem {
     }
 
     /** 互換物件座標 */
-    public exchangeItem(mainCoord: cc.Vec2, targetCoord: cc.Vec2) {
+    public switchItem(mainCoord: cc.Vec2, targetCoord: cc.Vec2) {
         const mainItem = this._orbMatrix[mainCoord.x][mainCoord.y];
         const targetItem = this._orbMatrix[targetCoord.x][targetCoord.y];
 

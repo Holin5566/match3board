@@ -15,7 +15,7 @@ export default class Orb extends cc.Component {
     public isMatch: boolean = false;
 
     private _coord: cc.Vec2 = null;
-    public get coord(): cc.Vec2 { return this._coord; }
+    public get coord(): cc.Vec2 { return cc.v2(this._coord); }
     // public get coordStr(): string { return `${this._coord.x}-${this._coord.y}`; }
     public get coordStr(): string { return OrbString[this._type]; }
 
@@ -27,6 +27,7 @@ export default class Orb extends cc.Component {
     private _posBeforMove: cc.Vec2 = null;
     private _isMoving: boolean = false;
     private _isPlaying: boolean = false;
+    private _isDragging: boolean = false;
     // LIFE-CYCLE CALLBACKS:
 
     // onLoad () {}
@@ -56,35 +57,36 @@ export default class Orb extends cc.Component {
         this.node.on(cc.Node.EventType.TOUCH_END, this.onTouchEnd, this);
     }
 
-    /** 轉移圖標 */
-    public transformTo(coord: cc.Vec2, doTween: boolean = true) {
+    /** 交換圖標動畫 */
+    public playSwtichAni(doTween: boolean = true) {
         this.node.setSiblingIndex(999);
-        this._coord = coord;
         return new Promise((resolve, reject) => {
             if (doTween) {
                 this._isMoving = true;
                 cc.tween(this.node)
-                    .to(0.2, { position: cc.v3(GridSystem.instance.getPos(coord)) }, { easing: cc.easing.quadOut })
+                    .to(0.1, { position: cc.v3(GridSystem.instance.getPos(this.coord)) }, { easing: cc.easing.quadOut })
                     .call(resolve)
                     .call(() => this._isMoving = false)
                     .start();
             } else {
-                this.node.setPosition(GridSystem.instance.getPos(coord));
+                this.node.setPosition(GridSystem.instance.getPos(this.coord));
             }
         })
     }
 
-    // 掉落動畫 (根據自身座標掉落，使用前先設定到對應座標)
-    public async drop(raito: number): Promise<void> {
+    // 掉落動畫
+    public async playDropAni(raito: number): Promise<void> {
         this.node.active = true;
         const base = 0.3;
         const duration = 0.5;
         const before = duration * raito;
         const during = duration - before + base;
         return new Promise((resolve, reject) => {
+            this._isMoving = true;
             cc.tween(this.node)
                 .delay(before)
                 .to(during, { position: cc.v3(GridSystem.instance.getPos(this._coord)) }, { easing: cc.easing.quadOut })
+                .call(() => this._isMoving = false)
                 .call(resolve)
                 .start();
         });
@@ -132,6 +134,7 @@ export default class Orb extends cc.Component {
         console.log(`onTouchStart: [${this._coord.x}, ${this._coord.y}]`);
         this._posBeforMove = this.node.getPosition();
         this._coordBeforMove = this._coord;
+        this._isDragging = true;
 
         cc.systemEvent.emit(EventType.ORB_PICK, this);
     }
@@ -145,18 +148,17 @@ export default class Orb extends cc.Component {
     }
 
     public onCollisionEnter(other: cc.Collider, self: cc.Collider) {
-        if (this._isMoving) {
+        if (other.getComponent(Orb)) {
+            // 碰撞到其他 Orb 不動作
+            return;
+        }
+        if (!this._isDragging) {
+            // 拖曳中才會觸發交換
             return;
         }
 
-        cc.error("enter")
-        const { x, y } = GridSystem.instance.getCoord(cc.v2(this.node.position));
-
-        if (GridSystem.instance.isOverSize(cc.v2(x, y))) return;
-        if (x !== this._coord.x || y !== this._coord.y) {
-            cc.systemEvent.emit(EventType.ORB_EXCHANGE, this._coord, cc.v2(x, y));
-        }
-
+        const targetCoord = GridSystem.instance.getCoord(cc.v2(other.node.position));
+        cc.systemEvent.emit(EventType.ORB_SWITCH, this._coord, targetCoord);
     }
 
     /** 監聽點擊結束 */
@@ -166,6 +168,7 @@ export default class Orb extends cc.Component {
         this.node.setPosition(GridSystem.instance.getPos(this._coord));
         this._posBeforMove = null;
         this._coordBeforMove = null;
+        this._isDragging = false;
 
         cc.systemEvent.emit(EventType.ORB_MATCH, e, this);
     }

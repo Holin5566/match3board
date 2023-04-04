@@ -7,8 +7,9 @@ export enum EventType {
     ORB_PICK = "ORB_PICK",
     ORB_MOVE = "ORB_MOVE",
     ORB_MATCH = "ORB_MATCH",
-    ORB_EXCHANGE = "ORB_EXCHANGE",
-    ORB_DROP = "ORB_DROP"
+    ORB_SWITCH = "ORB_SWITCH",
+    ORB_DROP = "ORB_DROP",
+    TRIGGER_ENTER = "TRIGGER_ENTER",
 }
 export enum OrbType {
     NONE,
@@ -46,6 +47,8 @@ export default class BOARD extends cc.Component {
     gridNode: cc.Node = null;
     @property(cc.Node)
     blockNode: cc.Node = null;
+    @property(cc.CircleCollider)
+    trigger: cc.CircleCollider = null;
 
     @property
     gap: number = 10;
@@ -65,7 +68,7 @@ export default class BOARD extends cc.Component {
         this.initGrid();
         cc.director.getCollisionManager().enabled = true;
         cc.director.getCollisionManager().enabledDebugDraw = true;
-        cc.systemEvent.on(EventType.ORB_EXCHANGE, this.onOrbExchange, this);
+        cc.systemEvent.on(EventType.ORB_SWITCH, this.onOrbSwitch, this);
         cc.systemEvent.on(EventType.ORB_MATCH, this.onOrbMatch, this);
         cc.systemEvent.on(EventType.ORB_PICK, this.onOrbPick, this);
     }
@@ -73,7 +76,7 @@ export default class BOARD extends cc.Component {
     // update (dt) {}
 
     protected onDestroy(): void {
-        cc.systemEvent.off(EventType.ORB_EXCHANGE, this.onOrbExchange, this);
+        cc.systemEvent.off(EventType.ORB_SWITCH, this.onOrbSwitch, this);
         cc.systemEvent.off(EventType.ORB_MATCH, this.onOrbMatch, this);
         cc.systemEvent.off(EventType.ORB_PICK, this.onOrbPick, this);
     }
@@ -87,9 +90,11 @@ export default class BOARD extends cc.Component {
 
         for (let col = 0; col < gridSize.x; col++) {
             for (let row = 0; row < gridSize.y; row++) {
+                // 生成圖標
                 const orbNode = cc.instantiate(this.orbPrefab);
                 const orbItem = orbNode.getComponent(Orb);
 
+                orbItem.getComponent(cc.CircleCollider).radius = this.orbPrefab.width / 3;
                 orbNode.setParent(this.gridNode);
                 orbNode.setPosition(this._grid.getPos(cc.v2(col, row)));
 
@@ -97,6 +102,12 @@ export default class BOARD extends cc.Component {
                 orbItem.init(cc.v2(col, row), type);
 
                 this._grid.insertItem(cc.v2(col, row), orbItem);
+
+                // 生成觸發器
+                const trigger = cc.instantiate(this.trigger.node).getComponent(cc.CircleCollider);
+                trigger.node.setParent(this.gridNode);
+                trigger.node.setPosition(this._grid.getPos(cc.v2(col, row)));
+                trigger.radius = this.orbPrefab.width / 3;
             }
         }
     }
@@ -113,16 +124,16 @@ export default class BOARD extends cc.Component {
         this._passedOrbs.push(orb);
     }
     /** 監聽圖標互換 */
-    private onOrbExchange(mainCoord: cc.Vec2, targetCoord: cc.Vec2) {
+    private onOrbSwitch(mainCoord: cc.Vec2, targetCoord: cc.Vec2) {
         cc.warn(`onOrbExchange: [${mainCoord.x}, ${mainCoord.y}] => [${targetCoord.x}, ${targetCoord.y}]`);
-        const mainItem = this._grid.getItem(mainCoord);
         const targetItem = this._grid.getItem(targetCoord);
+        const mainItem = this._grid.getItem(mainCoord);
 
         this._passedOrbs.push(targetItem);
-        this._grid.exchangeItem(mainCoord, targetCoord);
-
-        targetItem.transformTo(mainCoord);
+        this._grid.switchItem(mainCoord, targetCoord);
         mainItem.setCoord(targetCoord);
+        targetItem.setCoord(mainCoord);
+        targetItem.playSwtichAni(true);
     }
 
     /** 監聽圖標消除 */
@@ -173,7 +184,7 @@ export default class BOARD extends cc.Component {
             dropOrbs.forEach((dropOrb, dropCount) => {
                 const raito = dropCount / dropOrbs.length;
                 this._passedOrbs.push(dropOrb);
-                dropingTween.push(dropOrb.drop(raito));
+                dropingTween.push(dropOrb.playDropAni(raito));
             });
         });
 

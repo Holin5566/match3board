@@ -11,17 +11,34 @@ export enum EventType {
     ORB_DROP = "ORB_DROP"
 }
 export enum OrbType {
-    NONE = "NONE",
-    H1 = "H1",
-    H2 = "H2",
-    N1 = "N1",
-    N2 = "N2",
-    N3 = "N3",
-    N4 = "N4",
+    NONE,
+    WATER,
+    FIRE,
+    WOOD,
+    LIGHT,
+    DARK,
+    HEAL,
 }
-
+export const OrbColor = {
+    [OrbType.NONE]: cc.Color.WHITE,
+    [OrbType.WATER]: cc.color(100, 150, 255),
+    [OrbType.FIRE]: cc.color(230, 100, 100),
+    [OrbType.WOOD]: cc.color(100, 200, 100),
+    [OrbType.HEAL]: cc.color(255, 140, 170),
+    [OrbType.LIGHT]: cc.color(250, 250, 100),
+    [OrbType.DARK]: cc.color(170, 60, 255),
+};
+export const OrbString = {
+    [OrbType.NONE]: "無",
+    [OrbType.WATER]: "水",
+    [OrbType.FIRE]: "火",
+    [OrbType.WOOD]: "木",
+    [OrbType.HEAL]: "心",
+    [OrbType.LIGHT]: "光",
+    [OrbType.DARK]: "暗"
+};
 @ccclass
-export default class Board extends cc.Component {
+export default class BOARD extends cc.Component {
 
     @property(cc.Node)
     orbPrefab: cc.Node = null;
@@ -46,7 +63,8 @@ export default class Board extends cc.Component {
 
     start() {
         this.initGrid();
-
+        cc.director.getCollisionManager().enabled = true;
+        cc.director.getCollisionManager().enabledDebugDraw = true;
         cc.systemEvent.on(EventType.ORB_EXCHANGE, this.onOrbExchange, this);
         cc.systemEvent.on(EventType.ORB_MATCH, this.onOrbMatch, this);
         cc.systemEvent.on(EventType.ORB_PICK, this.onOrbPick, this);
@@ -75,7 +93,7 @@ export default class Board extends cc.Component {
                 orbNode.setParent(this.gridNode);
                 orbNode.setPosition(this._grid.getPos(cc.v2(col, row)));
 
-                const type = [OrbType.H1, OrbType.H2, OrbType.N1, OrbType.N2, OrbType.N3, OrbType.N4][Math.floor(Math.random() * 6)];
+                const type = [OrbType.WATER, OrbType.FIRE, OrbType.WOOD, OrbType.LIGHT, OrbType.DARK, OrbType.HEAL][Math.floor(Math.random() * 6)];
                 orbItem.init(cc.v2(col, row), type);
 
                 this._grid.insertItem(cc.v2(col, row), orbItem);
@@ -167,37 +185,4 @@ export default class Board extends cc.Component {
         await Promise.all(dropingTween);
         if (match3List.length > 0) this.onOrbMatch();
     }
-
-    // /** 監聽圖標掉落 */
-    // private async onOrbDrop(main: Orb) {
-    //     let originY = main.coord.y;
-    //     this._passedOrbs.push(main);
-    //     main.node.active = false;
-
-    //     for (let curY = originY; curY > 0; curY--) {
-    //         const lowerOrb = main;
-    //         const upperOrb = this._grid.getItem(cc.v2(main.coord.x, main.coord.y - 1));
-
-    //         this._passedOrbs.push(upperOrb);
-    //         const lowerCoord = lowerOrb.coord;
-    //         const upperCoord = upperOrb.coord;
-    //         if (curY === 1) {
-    //             lowerOrb.transformTo(upperCoord, false);
-    //             upperOrb.transformTo(lowerCoord, false);
-    //         } else {
-    //             upperOrb.transformTo(lowerCoord, false);
-    //             lowerOrb.transformTo(upperCoord, false);
-    //         }
-    //         this._grid.exchangeItem(lowerOrb.coord, upperOrb.coord);
-    //     }
-    //     main.setType();
-    //     main.node.active = true;
-    //     cc.error("main", main.coord.x, "-", main.coord.y, "after");
-
-    //     // 必須等所有盤面 drop 完畢才能進行 match
-    //     this.scheduleOnce(() => {
-    //         this.onOrbMatch();
-    //         main.node.active = true;
-    //     });
-    // }
 }

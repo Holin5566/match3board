@@ -1,4 +1,4 @@
-import { EventType, OrbType } from "./Board";
+import { EventType, OrbColor, OrbString, OrbType } from "./Board";
 import GridSystem from "./GridSystem";
 
 const { ccclass, property } = cc._decorator;
@@ -6,8 +6,8 @@ const { ccclass, property } = cc._decorator;
 @ccclass
 export default class Orb extends cc.Component {
 
-    @property(sp.Skeleton)
-    spine: sp.Skeleton = null;
+    @property(cc.Graphics)
+    graphics: cc.Graphics = null;
 
     @property(cc.Label)
     label: cc.Label = null;
@@ -16,7 +16,8 @@ export default class Orb extends cc.Component {
 
     private _coord: cc.Vec2 = null;
     public get coord(): cc.Vec2 { return this._coord; }
-    public get coordStr(): string { return `${this._coord.x}-${this._coord.y}`; }
+    // public get coordStr(): string { return `${this._coord.x}-${this._coord.y}`; }
+    public get coordStr(): string { return OrbString[this._type]; }
 
     private _type: OrbType = null;
     public get type(): OrbType { return this._type; }
@@ -45,6 +46,8 @@ export default class Orb extends cc.Component {
     /** 初始化 */
     public init(coord: cc.Vec2, type: OrbType) {
         this._coord = coord;
+        this.graphics.clear();
+        this.graphics.circle(0, 0, this.node.height / 2);
         this.setType(type);
 
         // 綁定觸摸事件
@@ -57,12 +60,13 @@ export default class Orb extends cc.Component {
     public transformTo(coord: cc.Vec2, doTween: boolean = true) {
         this.node.setSiblingIndex(999);
         this._coord = coord;
-        // this.node.setPosition(GridSystem.instance.getPos(coord));
         return new Promise((resolve, reject) => {
             if (doTween) {
+                this._isMoving = true;
                 cc.tween(this.node)
                     .to(0.2, { position: cc.v3(GridSystem.instance.getPos(coord)) }, { easing: cc.easing.quadOut })
                     .call(resolve)
+                    .call(() => this._isMoving = false)
                     .start();
             } else {
                 this.node.setPosition(GridSystem.instance.getPos(coord));
@@ -72,6 +76,7 @@ export default class Orb extends cc.Component {
 
     // 掉落動畫 (根據自身座標掉落，使用前先設定到對應座標)
     public async drop(raito: number): Promise<void> {
+        this.node.active = true;
         const base = 0.3;
         const duration = 0.5;
         const before = duration * raito;
@@ -87,18 +92,18 @@ export default class Orb extends cc.Component {
     /** 設置屬性 */
     public setType(type?: OrbType) {
         if (!type) {
-            this._type = [OrbType.H1, OrbType.H2, OrbType.N1, OrbType.N2, OrbType.N3, OrbType.N4][Math.floor(Math.random() * 6)];
+            this._type = [OrbType.WATER, OrbType.FIRE, OrbType.WOOD, OrbType.LIGHT, OrbType.DARK, OrbType.HEAL][Math.floor(Math.random() * 6)];
         } else {
             this._type = type;
         }
-        this.spine.setAnimation(0, `${this._type}_play_normal`, true);
-        this.label.string = `${this._coord.x} - ${this._coord.y}`;
+        this.graphics.fillColor = OrbColor[this._type];
+        this.graphics.fill();
+        this.label.string = this.coordStr;
     }
 
     /** 設置座標 */
     public setCoord(coord: cc.Vec2) {
         this._coord = coord;
-        this.label.string = `${coord.x} - ${coord.y}`;
     }
 
     /** 播放勝利特效 */
@@ -108,13 +113,17 @@ export default class Orb extends cc.Component {
         }
         this._isPlaying = true;
         return new Promise((resolve, reject) => {
-            this.spine.setAnimation(0, `${this._type}_play_win`, false);
-            cc.error(`${this._coord.y} - ${this._coord.x}`);
-            this.spine.setCompleteListener(() => {
-                this.spine.setCompleteListener(null);
-                this._isPlaying = false;
-                resolve("");
-            });
+            cc.tween(this.node)
+                .to(0.2, { scale: 1.2 }, { easing: cc.easing.quartOut })
+                .to(0.5, { scale: 0, opacity: 0 }, { easing: cc.easing.quadOut })
+                .call(() => {
+                    this.node.active = false;
+                    this.node.scale = 1;
+                    this.node.opacity = 255;
+                    this._isPlaying = false;
+                    resolve(null);
+                })
+                .start();
         });
     }
 
@@ -133,16 +142,21 @@ export default class Orb extends cc.Component {
         const pos = this.node.getPosition();
         this.node.setPosition(pos.add(delta));
         this.node.setSiblingIndex(1000);
+    }
 
-        const { x, y } = GridSystem.instance.getCoord(cc.v2(this.node.position));
-
-        cc.systemEvent.emit(EventType.ORB_MOVE, e);
-        if (GridSystem.instance.isOverSize(cc.v2(x, y))) {
+    public onCollisionEnter(other: cc.Collider, self: cc.Collider) {
+        if (this._isMoving) {
             return;
         }
+
+        cc.error("enter")
+        const { x, y } = GridSystem.instance.getCoord(cc.v2(this.node.position));
+
+        if (GridSystem.instance.isOverSize(cc.v2(x, y))) return;
         if (x !== this._coord.x || y !== this._coord.y) {
             cc.systemEvent.emit(EventType.ORB_EXCHANGE, this._coord, cc.v2(x, y));
         }
+
     }
 
     /** 監聽點擊結束 */
